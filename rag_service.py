@@ -118,8 +118,10 @@ def ask_ai(user_question):
     with open(METADATA_PATH, 'rb') as f:
         metadata = pickle.load(f)
 
-    distances, indices = index.search(question_embedding, k=5)
+   total_students = index.ntotal 
     
+    # Force the database to retrieve ALL students for the AI to compare
+    distances, indices = index.search(question_embedding, k=total_students)    
     retrieved_context = ""
     sources = []
     for i in indices[0]:
