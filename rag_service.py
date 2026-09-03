@@ -4,7 +4,8 @@ import os
 import faiss
 import numpy as np
 import pickle
-import requests  # NEW: Used to call the Hugging Face API
+import requests  
+import time  # NEW: Required for the network retry loop
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -26,7 +27,7 @@ METADATA_PATH = os.path.join(VECTOR_DIR, "metadata.pkl")
 def get_embeddings(texts):
     """
     Generates vector embeddings by calling the free Hugging Face API
-    instead of using local server memory.
+    with automatic network retries for cloud stability.
     """
     hf_token = os.getenv("HF_TOKEN")
     if not hf_token:
@@ -35,14 +36,23 @@ def get_embeddings(texts):
     api_url = "https://api-inference.huggingface.co/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2"
     headers = {"Authorization": f"Bearer {hf_token}"}
     
-    # Send the batch of text chunks to Hugging Face
-    response = requests.post(api_url, headers=headers, json={"inputs": texts})
-    
-    if response.status_code != 200:
-        raise Exception(f"Hugging Face API Error: {response.status_code} - {response.text}")
-        
-    # The API returns a list of lists. FAISS strictly requires a 32-bit float NumPy array.
-    return np.array(response.json(), dtype=np.float32)
+    # Try to connect 3 times before giving up to handle Render's DNS glitches
+    for attempt in range(3):
+        try:
+            # Added a 15-second timeout to prevent the app from hanging infinitely
+            response = requests.post(api_url, headers=headers, json={"inputs": texts}, timeout=15)
+            
+            if response.status_code != 200:
+                raise Exception(f"Hugging Face API Error: {response.status_code} - {response.text}")
+                
+            # The API returns a list of lists. FAISS strictly requires a 32-bit float NumPy array.
+            return np.array(response.json(), dtype=np.float32)
+            
+        except requests.exceptions.ConnectionError:
+            if attempt == 2: # If it fails on the 3rd try (index 2), crash and show the error
+                raise Exception("Network failure: Could not connect to Hugging Face after 3 attempts.")
+            print(f"Network glitch detected. Retrying in 2 seconds... (Attempt {attempt + 1})")
+            time.sleep(2)
 
 
 def build_vector_db():
