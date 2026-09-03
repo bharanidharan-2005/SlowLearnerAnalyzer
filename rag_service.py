@@ -5,9 +5,21 @@ import faiss
 import numpy as np
 import pickle
 import requests  
-import time  # NEW: Required for the network retry loop
+import time  
+import socket # NEW: Imported to patch the cloud network
 from openai import OpenAI
 from dotenv import load_dotenv
+
+# --- CLOUD INFRASTRUCTURE PATCH ---
+# Render's free tier frequently suffers from broken IPv6 DNS resolution.
+# This overrides Python's default socket behavior to strictly use IPv4,
+# completely bypassing the '[Errno -5] No address associated with hostname' crash.
+old_getaddrinfo = socket.getaddrinfo
+def new_getaddrinfo(*args, **kwargs):
+    responses = old_getaddrinfo(*args, **kwargs)
+    return [res for res in responses if res[0] == socket.AF_INET]
+socket.getaddrinfo = new_getaddrinfo
+# ----------------------------------
 
 # Load environment variables (API Key from .env file)
 load_dotenv()
@@ -36,20 +48,18 @@ def get_embeddings(texts):
     api_url = "https://api-inference.huggingface.co/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2"
     headers = {"Authorization": f"Bearer {hf_token}"}
     
-    # Try to connect 3 times before giving up to handle Render's DNS glitches
+    # Try to connect 3 times before giving up
     for attempt in range(3):
         try:
-            # Added a 15-second timeout to prevent the app from hanging infinitely
             response = requests.post(api_url, headers=headers, json={"inputs": texts}, timeout=15)
             
             if response.status_code != 200:
                 raise Exception(f"Hugging Face API Error: {response.status_code} - {response.text}")
                 
-            # The API returns a list of lists. FAISS strictly requires a 32-bit float NumPy array.
             return np.array(response.json(), dtype=np.float32)
             
         except requests.exceptions.ConnectionError:
-            if attempt == 2: # If it fails on the 3rd try (index 2), crash and show the error
+            if attempt == 2: 
                 raise Exception("Network failure: Could not connect to Hugging Face after 3 attempts.")
             print(f"Network glitch detected. Retrying in 2 seconds... (Attempt {attempt + 1})")
             time.sleep(2)
@@ -80,7 +90,6 @@ def build_vector_db():
         reg_no, name, marks_json, fails, total, avg, status = row
         marks = json.loads(marks_json)
         
-        # Create a descriptive text chunk for the LLM context window
         chunk = f"Student Name: {name}. Register Number: {reg_no}. "
         chunk += f"Overall Status: {status}. Total Marks: {total}. Average: {avg}%. "
         if status == "Fail":
@@ -100,11 +109,10 @@ def build_vector_db():
     embeddings = get_embeddings(texts)
 
     # 3. LOAD (Save to FAISS)
-    dimension = embeddings.shape[1] # The size of the vector array (384 for MiniLM)
-    index = faiss.IndexFlatL2(dimension) # L2 measures the mathematical distance between vectors
+    dimension = embeddings.shape[1] 
+    index = faiss.IndexFlatL2(dimension) 
     index.add(embeddings)
 
-    # Save the FAISS index and the text metadata to disk
     faiss.write_index(index, FAISS_INDEX_PATH)
     with open(METADATA_PATH, 'wb') as f:
         pickle.dump(metadata, f)
@@ -122,29 +130,24 @@ def ask_ai(user_question):
     if not os.path.exists(FAISS_INDEX_PATH):
         return "Error: No data found. Please upload a student report first."
 
-    # 1. Convert the user's question into a mathematical vector via API
     try:
         question_embedding = get_embeddings([user_question])
     except Exception as e:
         return f"Embedding API Error: {str(e)}"
 
-    # 2. Search the Vector Database for the top 5 most relevant student records
     index = faiss.read_index(FAISS_INDEX_PATH)
     with open(METADATA_PATH, 'rb') as f:
         metadata = pickle.load(f)
 
-    # Retrieve distances and index numbers of the top 5 matches
     distances, indices = index.search(question_embedding, k=5)
     
-    # 3. Build the Context (The exact student records the AI must read)
     retrieved_context = ""
     sources = []
     for i in indices[0]:
-        if i != -1: # -1 means no match was found
+        if i != -1: 
             retrieved_context += metadata[i]["text"] + "\n\n"
             sources.append(metadata[i]["name"])
 
-    # 4. Construct the Prompt for the LLM
     system_prompt = f"""
     You are an intelligent Academic Assistant for Mount Zion College faculty. 
     Answer the faculty's question using ONLY the provided student context below.
@@ -155,7 +158,6 @@ def ask_ai(user_question):
     {retrieved_context}
     """
 
-    # 5. Send to Groq LLM
     try:
         response = client.chat.completions.create(
           model="openai/gpt-oss-120b",
@@ -167,7 +169,6 @@ def ask_ai(user_question):
         )
         answer = response.choices[0].message.content
         
-        # Add source citations to build trust
         unique_sources = list(set(sources))
         if unique_sources:
             citation = f"\n\n📚 *Sources: Student Records ({', '.join(unique_sources)})*"
