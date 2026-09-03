@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Faculty Login</title>
+    <style>
+        body { 
+            margin: 0; 
+            font-family: 'Segoe UI', sans-serif; 
+            background: #f4f7f6; 
+            height: 100vh; 
+            overflow: hidden; 
+        }
+
+        /* =========================
+           1️⃣ THE LOGO CONTAINER 
+           (Starts massive in center, then shrinks & moves)
+        ========================== */
+        .logo-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 500px;
+            height: 500px;
+            /* Center perfectly */
+            margin-top: -250px;
+            margin-left: -250px;
+            transform: scale(1);
+            transform-origin: top left;
+            z-index: 10;
+            
+            /* Animates to the top left corner at 7 seconds */
+            animation: shrinkAndMove 1.5s cubic-bezier(0.25, 1, 0.5, 1) 7s forwards;
+        }
+
+        @keyframes shrinkAndMove {
+            0% {
+                top: 50%;
+                left: 50%;
+                margin-top: -250px;
+                margin-left: -250px;
+                transform: scale(1);
+            }
+            100% {
+                top: 15px;
+                left: 20px;
+                margin-top: 0;
+                margin-left: 0;
+                transform: scale(0.16); /* Scales the giant 500px logo down to a perfect 80px */
+            }
+        }
+
+        /* =========================
+           EXACT MEASUREMENTS FROM YOUR website.html
+        ========================== */
+        .venn, .ring, .ribbon {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .venn {
+            width: 300px;
+            bottom: -300px;
+            opacity: 0;
+            z-index: 3;
+            animation: riseUp 3s ease-out forwards;
+        }
+        @keyframes riseUp {
+            0% { bottom: -300px; opacity: 0; }
+            60% { opacity: 1; }
+            100% { bottom: 155px; opacity: 1; }
+        }
+
+        .ring {
+            width: 400px;
+            bottom: 120px;
+            opacity: 0;
+            z-index: 2;
+            animation: fadeIn 2s ease-in forwards;
+            animation-delay: 3s;
+        }
+
+        .ribbon {
+            width: 420px;
+            bottom: 80px; 
+            opacity: 0;
+            z-index: 1;
+            animation: fadeIn 2s ease-in forwards;
+            animation-delay: 5s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* =========================
+           2️⃣ LOGIN BOX
+           (Fades in softly after the logo moves away)
+        ========================== */
+        .login-wrapper {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0;
+            pointer-events: none; /* Prevents clicking before it appears */
+            z-index: 5;
+            animation: showLogin 1s ease-out 7.5s forwards;
+        }
+        
+        @keyframes showLogin {
+            from { opacity: 0; margin-top: 20px; pointer-events: none; }
+            to { opacity: 1; margin-top: 0; pointer-events: auto; }
+        }
+
+        .box { 
+            background: white; 
+            padding: 40px; 
+            border-radius: 8px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
+            width: 320px; 
+            text-align: center; 
+        }
+        input { 
+            width: 100%; 
+            padding: 12px; 
+            margin: 10px 0; 
+            border: 1px solid #ddd; 
+            border-radius: 4px; 
+            box-sizing: border-box; 
+            outline: none; 
+            transition: 0.3s;
+        }
+        input:focus { border-color: #3498db; }
+        button { 
+            width: 100%; 
+            padding: 12px; 
+            background: #3498db; 
+            color: white; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-size: 16px; 
+            margin-top: 10px;
+            transition: 0.3s;
+        }
+        button:hover { background: #2980b9; }
+        .alert { color: white; background: #e74c3c; padding: 10px; font-size: 14px; margin-bottom: 15px; border-radius: 4px; }
+        
+        /* =========================
+           3️⃣ SKIP ANIMATION IF LOGIN FAILS
+           (If you type wrong password, it skips animation on reload)
+        ========================== */
+        .skip-anim .logo-container,
+        .skip-anim .venn,
+        .skip-anim .ring,
+        .skip-anim .ribbon,
+        .skip-anim .login-wrapper {
+            animation-delay: 0s !important;
+            animation-duration: 0.001s !important; /* Fast forwards to end */
+        }
+
+    </style>
+</head>
+<body class="{% if skip_anim %}skip-anim{% endif %}">
+    
+    <!-- 3-Part Logo Starts Huge, then Shrinks/Moves automatically -->
+    <div class="logo-container">
+        <img src="{{ url_for('static', filename='ribbon.png') }}" class="ribbon" alt="Ribbon">
+        <img src="{{ url_for('static', filename='ring.png') }}" class="ring" alt="Ring">
+        <img src="{{ url_for('static', filename='venn.png') }}" class="venn" alt="Inner">
+    </div>
+
+    <!-- The Login Box -->
+    <div class="login-wrapper">
+        <div class="box">
+            <h2 style="color: #2c3e50; margin-bottom: 25px;">Faculty Login</h2>
+            
+            {% with messages = get_flashed_messages() %}
+                {% if messages %} <div class="alert">{{ messages[0] }}</div> {% endif %}
+            {% endwith %}
+            
+            <form method="post" action="{{ url_for('login') }}">
+                <input type="text" name="username" placeholder="Username" required>
+                <input type="password" name="password" placeholder="Password" required>
+                <button type="submit">Sign In</button>
+            </form>
+        </div>
+    </div>
+    
+</body>
+</html>

@@ -1,0 +1,8 @@
+Flask
+pandas
+openpyxl
+faiss-cpu
+openai
+python-dotenv
+gunicorn
+requests
