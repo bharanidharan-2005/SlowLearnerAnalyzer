@@ -139,7 +139,7 @@ def ask_ai(user_question):
 
     try:
         response = client.chat.completions.create(
-          model="openai/gpt-oss-120b",
+         model="llama3-70b-8192",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_question}
