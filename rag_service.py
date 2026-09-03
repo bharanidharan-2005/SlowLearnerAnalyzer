@@ -4,22 +4,9 @@ import os
 import faiss
 import numpy as np
 import pickle
-import requests  
-import time  
-import socket # NEW: Imported to patch the cloud network
+from huggingface_hub import InferenceClient
 from openai import OpenAI
 from dotenv import load_dotenv
-
-# --- CLOUD INFRASTRUCTURE PATCH ---
-# Render's free tier frequently suffers from broken IPv6 DNS resolution.
-# This overrides Python's default socket behavior to strictly use IPv4,
-# completely bypassing the '[Errno -5] No address associated with hostname' crash.
-old_getaddrinfo = socket.getaddrinfo
-def new_getaddrinfo(*args, **kwargs):
-    responses = old_getaddrinfo(*args, **kwargs)
-    return [res for res in responses if res[0] == socket.AF_INET]
-socket.getaddrinfo = new_getaddrinfo
-# ----------------------------------
 
 # Load environment variables (API Key from .env file)
 load_dotenv()
@@ -38,32 +25,24 @@ METADATA_PATH = os.path.join(VECTOR_DIR, "metadata.pkl")
 
 def get_embeddings(texts):
     """
-    Generates vector embeddings by calling the free Hugging Face API
-    with automatic network retries for cloud stability.
+    Generates vector embeddings using the official Hugging Face Hub client.
+    This automatically routes through their new Inference Providers network.
     """
     hf_token = os.getenv("HF_TOKEN")
     if not hf_token:
         raise ValueError("HF_TOKEN environment variable is missing. Please add it to your .env file and Render.")
         
-    api_url = "https://api-inference.huggingface.co/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2"
-    headers = {"Authorization": f"Bearer {hf_token}"}
+    # Initialize the modern Inference Client
+    hf_client = InferenceClient(token=hf_token)
     
-    # Try to connect 3 times before giving up
-    for attempt in range(3):
-        try:
-            response = requests.post(api_url, headers=headers, json={"inputs": texts}, timeout=15)
-            
-            if response.status_code != 200:
-                raise Exception(f"Hugging Face API Error: {response.status_code} - {response.text}")
-                
-            return np.array(response.json(), dtype=np.float32)
-            
-        except requests.exceptions.ConnectionError:
-            if attempt == 2: 
-                raise Exception("Network failure: Could not connect to Hugging Face after 3 attempts.")
-            print(f"Network glitch detected. Retrying in 2 seconds... (Attempt {attempt + 1})")
-            time.sleep(2)
-
+    # The official client automatically handles the network requests, retries, and new URLs
+    response = hf_client.feature_extraction(
+        text=texts, 
+        model="sentence-transformers/all-MiniLM-L6-v2"
+    )
+    
+    # The API returns a list of floats. FAISS strictly requires a 32-bit float NumPy array.
+    return np.array(response, dtype=np.float32)
 
 def build_vector_db():
     """

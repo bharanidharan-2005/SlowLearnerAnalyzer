@@ -5,5 +5,5 @@ faiss-cpu
 openai
 python-dotenv
 gunicorn
-requests
+huggingface_hub
 matplotlib
