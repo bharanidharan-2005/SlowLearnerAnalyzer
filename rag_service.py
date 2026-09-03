@@ -139,7 +139,7 @@ def ask_ai(user_question):
 
     try:
         response = client.chat.completions.create(
-         model="llama3-70b-8192",
+       model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_question}
