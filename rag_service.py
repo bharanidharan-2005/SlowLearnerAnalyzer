@@ -118,10 +118,12 @@ def ask_ai(user_question):
     with open(METADATA_PATH, 'rb') as f:
         metadata = pickle.load(f)
 
-   total_students = index.ntotal 
+    # Automatically count exactly how many students are in the database
+    total_students = index.ntotal 
     
     # Force the database to retrieve ALL students for the AI to compare
-    distances, indices = index.search(question_embedding, k=total_students)    
+    distances, indices = index.search(question_embedding, k=total_students)
+    
     retrieved_context = ""
     sources = []
     for i in indices[0]:
@@ -145,12 +147,12 @@ def ask_ai(user_question):
 
     try:
         response = client.chat.completions.create(
-          model="qwen/qwen3.6-27b", # Free-tier supported reasoning model
+          model="qwen/qwen3.6-27b", 
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_question}
             ],
-            temperature=0.0 # Changed from 0.1 to 0.0 for absolute mathematical strictness
+            temperature=0.0 
         )
         answer = response.choices[0].message.content
         
