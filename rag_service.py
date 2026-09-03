@@ -127,11 +127,15 @@ def ask_ai(user_question):
             retrieved_context += metadata[i]["text"] + "\n\n"
             sources.append(metadata[i]["name"])
 
+    # Strict prompt engineering to prevent data hallucinations
     system_prompt = f"""
-    You are an intelligent Academic Assistant for Mount Zion College faculty. 
-    Answer the faculty's question using ONLY the provided student context below.
-    Do not invent marks, names, or statistics. 
-    If the context does not contain the answer, politely state that you cannot find the information in the current database.
+    You are a strict, analytical Academic Assistant for Mount Zion College. 
+    You must answer the faculty's question using ONLY the provided student records below. 
+    
+    RULES:
+    1. Do not invent or hallucinate any marks, names, or statistics.
+    2. If the retrieved context does not contain the answer, reply exactly with: "I cannot find this information in the current database."
+    3. Extract the exact numerical values as they appear in the context.
     
     RETRIEVED CONTEXT:
     {retrieved_context}
@@ -139,12 +143,12 @@ def ask_ai(user_question):
 
     try:
         response = client.chat.completions.create(
-      model="llama-3.1-8b-instant",
+          model="qwen/qwen3.6-27b", # Free-tier supported reasoning model
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_question}
             ],
-            temperature=0.1 
+            temperature=0.0 # Changed from 0.1 to 0.0 for absolute mathematical strictness
         )
         answer = response.choices[0].message.content
         
