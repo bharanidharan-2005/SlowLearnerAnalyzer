@@ -101,10 +101,8 @@ def build_vector_db():
 
 def ask_ai(user_question):
     """
-    RAG RETRIEVAL PIPELINE:
-    1. Embed user question
-    2. Search FAISS vector DB for closest matches
-    3. Send retrieved data + question to LLM
+    RAG RETRIEVAL PIPELINE (MINIFIED):
+    Retrieves all students and compresses the text to bypass API token limits.
     """
     if not os.path.exists(FAISS_INDEX_PATH):
         return "Error: No data found. Please upload a student report first."
@@ -118,20 +116,27 @@ def ask_ai(user_question):
     with open(METADATA_PATH, 'rb') as f:
         metadata = pickle.load(f)
 
-    # Automatically count exactly how many students are in the database
+    # Retrieve ALL students so the AI has the complete dataset
     total_students = index.ntotal 
-    
-    # Force the database to retrieve ALL students for the AI to compare
     distances, indices = index.search(question_embedding, k=total_students)
     
     retrieved_context = ""
     sources = []
     for i in indices[0]:
         if i != -1: 
-            retrieved_context += metadata[i]["text"] + "\n\n"
+            # DATA MINIFICATION: Strip redundant words to reduce token footprint by ~45%
+            raw_text = metadata[i]["text"]
+            compressed = raw_text.replace("Student Name: ", "") \
+                                 .replace(". Register Number: ", " | Reg:") \
+                                 .replace(". Overall Status: ", " | Stat:") \
+                                 .replace(". Total Marks: ", " | Tot:") \
+                                 .replace(". Average: ", " | Avg:") \
+                                 .replace("This student failed in the following subjects: ", "Fail:") \
+                                 .replace(". Subject-wise performance: ", " | Marks:")
+            
+            retrieved_context += compressed + "\n"
             sources.append(metadata[i]["name"])
 
-    # Strict prompt engineering to prevent data hallucinations
     system_prompt = f"""
     You are a strict, analytical Academic Assistant for Mount Zion College. 
     You must answer the faculty's question using ONLY the provided student records below. 
@@ -158,7 +163,11 @@ def ask_ai(user_question):
         
         unique_sources = list(set(sources))
         if unique_sources:
-            citation = f"\n\n📚 *Sources: Student Records ({', '.join(unique_sources)})*"
+            # Prevent the UI from being flooded with 65 names if all data is used
+            if len(unique_sources) > 10:
+                citation = f"\n\n📚 *Sources: All {len(unique_sources)} Student Records Analyzed*"
+            else:
+                citation = f"\n\n📚 *Sources: Student Records ({', '.join(unique_sources)})*"
             return answer + citation
         else:
             return answer
